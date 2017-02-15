@@ -1,0 +1,282 @@
+<?php namespace ProcessWire;
+
+/**
+ *
+ * Import External Images
+ * Enables pages to import images in pasted content, into the local images field.
+ *
+ * @author Macrura / outflux3
+ *
+ * ProcessWire 2.x
+ * Copyright (C) 2014 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://processwire.com
+ *
+ *  @todo
+ * 1) setting for external base URL (temp)
+ * 2) enable/disable (without uninstall)
+ * 3) role based permissions
+ *
+ * 
+ */
+
+class ImportExternalImages extends WireData implements Module, ConfigurableModule {
+
+	public static function getModuleInfo() {
+
+		return array(
+			'title' 	=> 'Import External Images',
+			'version' 	=> 1,
+			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
+			'href' 		=> 'http://nibiri.com',
+			'singular' 	=> true,
+			'autoload' 	=> 'template=admin',
+			'icon' 		=> 'download',
+			'author'   => 'Marc W. | @Macrura(community), @outflux3 (Github), http://nibiri.com',
+			);
+	}
+
+
+	protected static $configDefaults = array(
+		'img_field'		=> 'images',
+		'ta_field'		=> 'body',
+		'proceed'		=> false
+	); 
+
+
+	/**
+	 * Data as used by the get/set functions
+	 *
+	 */
+	protected $data = array();
+
+	/**
+	 * Set our configuration defaults
+	 *
+	 */
+	public function __construct() {
+		foreach(self::$configDefaults as $key => $value) {
+			$this->set($key, $value); 
+		}
+	}
+
+
+	/**
+	 * Module configuration screen
+	 *
+	 */
+	public static function getModuleConfigInputfields(array $data) {
+
+		foreach(self::$configDefaults as $key => $value) {
+			if(!isset($data[$key])||$data[$key]=="") $data[$key] = $value;
+		}
+
+		unset($data['cacheClear']);
+		$inputfields = new InputfieldWrapper();
+
+		// INSTRUCTIONS
+        // ------------------------------------------------------------------------
+	    $f = wire('modules')->get('InputfieldMarkup');
+        $f->name  = 'instructions';
+        $f->label = __('Instructions', __FILE__);
+        $f->markupText = __('For this module to work, please select the fields to allow this module to perform replacements on, as well as the name of the image field on the same page to add the images to.', __FILE__);
+        $f->markupText .= "<br>";
+        $f->markupText .= __('<span style="font-style:italic;color:red">If you are importing images from a 3rd party site, make sure you have permissions to store and display those images on your site.</span>', __FILE__);
+        $inputfields->add($f); 
+
+
+		// ENABLE FOR TEMPLATES
+        // ------------------------------------------------------------------------
+		$f = wire('modules')->get('InputfieldAsmSelect');
+		$f->attr('name+id', 'enabledTemplates');
+		$f->label = __('Enabled templates', __FILE__);
+		$f->description = __('URL Scanning will occur only on the selected templates. If none are selected, scanning will occur on all templates.', __FILE__);
+		$f->attr('title', __('Enabled templates', __FILE__));
+		$f->setAsmSelectOption('sortable', false);
+
+		// populate with all available templates
+		foreach(wire('templates') as $t) {
+			// filter out system templates
+			if(!($t->flags & Template::flagSystem)) $f->addOption($t->name);
+		}
+		if(isset($data['enabledTemplates'])) $f->value = $data['enabledTemplates'];
+		$f->columnWidth = 33;
+		$inputfields->add($f); 
+
+
+        // ------------------------------------------------------------------------
+        // Field to put images into 
+        // ------------------------------------------------------------------------
+        $img_fields = wire('fields')->find('type=FieldtypeImage');
+        if (count($img_fields) > 0) {
+            $f              = wire('modules')->get('InputfieldSelect');
+            $f->name        = 'img_field';
+            $f->label       = __('Images Field', __FILE__);
+
+            foreach ($img_fields as $img_field) {
+                $f->addOption($img_field->name, self::getFormattedOptionName($img_field));
+            }
+
+            if ($data[ $f->name ]) {
+                $f->attr('value', $data[ $f->name ]);
+            }
+        } else {
+            // add info that no URL type fields are available
+            $f        = wire('modules')->get('InputfieldMarkup');
+            $f->name  = 'no_images_fields';
+            $f->label = __('Enabled fields', __FILE__);
+            $f->markupText = __('There are no image fields available', __FILE__);
+        }
+        $f->columnWidth = 34;
+        //$fset->add($f);
+        $inputfields->add($f);
+
+        // ------------------------------------------------------------------------
+        // Field to search for external image URLs
+        // ------------------------------------------------------------------------
+        $ta_fields = wire('fields')->find('type=FieldtypeTextarea');
+        if (count($ta_fields) > 0) {
+            $f              = wire('modules')->get('InputfieldSelect');
+            $f->name        = 'ta_field';
+            $f->label       = __('Textarea Field', __FILE__);
+            $f->description = __('Select the field to scan for external URLs.', __FILE__);
+            foreach ($ta_fields as $ta_field) {
+                $f->addOption($ta_field->name, self::getFormattedOptionName($ta_field));
+            }
+
+            if ($data[ $f->name ]) {
+                $f->attr('value', $data[ $f->name ]);
+            }
+        } else {
+            // add info that no URL type fields are available
+            $f        = wire('modules')->get('InputfieldMarkup');
+            $f->name  = 'no_textarea_fields';
+            $f->label = __('Textarea fields', __FILE__);
+            $f->markupText = __('There are no textarea fields available to search in.', __FILE__);
+        }
+        $f->columnWidth = 33;
+      	//$fset->add($f);
+        $inputfields->add($f);
+
+
+		// ------------------------------------------------------------------------
+		return $inputfields;
+	}
+
+
+
+    public static function getFormattedOptionName($obj) {
+        return !empty($obj->label) ? $obj->label . ' (' . $obj->name . ')' : $obj->name;
+    }
+
+	/**
+	 * Initialize the module
+	 *
+	 * ProcessWire calls this when the module is loaded. For 'autoload' modules, this will be called
+	 * when ProcessWire's API is ready. As a result, this is a good place to attach hooks.
+	 *
+	 */
+	public function init() {
+		$this->pages->addHookAfter('save', $this, 'importExternalImages');
+
+	}
+
+	/**
+	 * ready() is called when both PW's API is ready and $page object is initialized (for autoload modules!)
+	 * Add the hook here to be able to skip it based on the template of the edited page.
+	 *
+	 */
+	public function ready() {
+		// we're interested in page editor only
+		if(wire('page')->process != 'ProcessPageEdit') return;
+
+		// skip changing templates (only target the actual edit form)
+		$id = (int)$this->input->get('id');
+		if(!$id) return;
+
+		// wire('page') would be the page with ProcessPageEdit
+		// GET parameter id tells the page that's being edited
+		$this->editedPage = wire('pages')->get($id);
+
+		// don't even consider system templates
+		if($this->editedPage->template->flags & Template::flagSystem) return;
+
+		// hook only if
+		// 1) no templates have been chosen (=all enabled) OR
+		// 2) the template of the edited page has been chosen
+		if(count($this->enabledTemplates) == 0 or
+		   in_array($this->editedPage->template->name, $this->enabledTemplates)) {
+			$this->proceed = true;
+		}
+	}
+
+
+
+	/**
+	 * [importExternalImages description]
+	 * @param  [type] $event [description]
+	 * @return [type]        [description]
+	 */
+	public function importExternalImages($event) {
+
+		if(!$this->proceed) return;
+
+		$page = $event->arguments[0];
+
+		$ta_field = $this->ta_field;
+		$img_field = $this->img_field;
+
+		$html = $page->$ta_field;
+		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
+
+        $dom = new \DOMDocument(); 
+        $dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+        $images = $dom->getElementsByTagName('img');
+        if(!$images->length) return; // not needed?
+
+        $assetsPath = $this->pages->get($page->id)->filesManager()->url();
+
+        $extCount = 0;
+        foreach ($images as $image) {
+            $img_url = $image->getAttribute('src');
+            if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+            $page->$img_field->add($img_url);
+
+	        if($image->getAttribute('title') != ''){
+	            $page->$img_field->last()->description = $image->getAttribute('title');
+	        }
+	        elseif($image->getAttribute('alt') != ''){
+	            $page->$img_field->last()->description = $image->getAttribute('alt');
+			}
+
+            //resize image to make version to match the size originally in the RTE
+            //check to make sure size is different to downloaded version before resizing
+            if($image->getAttribute('width') && $image->getAttribute('width') != $page->$img_field->last()->width) {
+                $imgForRte = $page->$img_field->last()->size($image->getAttribute('width'), 0);
+            }
+            else {
+                $imgForRte = $page->$img_field->last();
+            }
+			$image->setAttribute('src', $imgForRte->url);
+
+            $extCount++;
+        }
+
+        if(!$extCount) return;
+    	$page->of(false);
+
+   		$page->$ta_field = preg_replace('/^<!DOCTYPE.+?>/', '', str_replace( array('<html>', '</html>', '<body>', '</body>'), array('', '', '', ''), $dom->saveHTML()));
+
+   	 	$page->save($ta_field);
+   	 	$this->message("image links updated to local images.");
+
+        $page->save($img_field);
+        $this->message("external images imported to page");
+
+    }
+
+
+
+
+} // end class
