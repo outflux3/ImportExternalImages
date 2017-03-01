@@ -18,7 +18,6 @@
  * 2) enable/disable (without uninstall)
  * 3) role based permissions
  *
- * 
  */
 
 class ImportExternalImages extends WireData implements Module, ConfigurableModule {
@@ -129,7 +128,6 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
             $f->markupText = __('There are no image fields available', __FILE__);
         }
         $f->columnWidth = 34;
-        //$fset->add($f);
         $inputfields->add($f);
 
         // ------------------------------------------------------------------------
@@ -156,7 +154,6 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
             $f->markupText = __('There are no textarea fields available to search in.', __FILE__);
         }
         $f->columnWidth = 33;
-      	//$fset->add($f);
         $inputfields->add($f);
 
 
@@ -275,7 +272,6 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $this->message("external images imported to page");
 
     }
-
 
 
 
