@@ -28,7 +28,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			'title' 	=> 'Import External Images',
 			'version' 	=> 1,
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
-			'href' 		=> 'http://nibiri.com',
+			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
 			'autoload' 	=> 'template=admin',
 			'icon' 		=> 'download',
