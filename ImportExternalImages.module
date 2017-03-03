@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> 1,
+			'version' 	=> 2,
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -133,7 +133,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         // ------------------------------------------------------------------------
         // Field to search for external image URLs
         // ------------------------------------------------------------------------
-        $ta_fields = wire('fields')->find('type=FieldtypeTextarea');
+        $ta_fields = wire('fields')->find('type=FieldtypeTextarea|FieldtypeTextareaLanguage');
         if (count($ta_fields) > 0) {
             $f              = wire('modules')->get('InputfieldSelect');
             $f->name        = 'ta_field';
