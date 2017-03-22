@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> 2,
+			'version' 	=> 201,
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -107,7 +107,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         // ------------------------------------------------------------------------
         // Field to put images into 
         // ------------------------------------------------------------------------
-        $img_fields = wire('fields')->find('type=FieldtypeImage');
+        $img_fields = wire('fields')->find('type=FieldtypeImage|FieldtypeCroppableImage3');
         if (count($img_fields) > 0) {
             $f              = wire('modules')->get('InputfieldSelect');
             $f->name        = 'img_field';
@@ -223,6 +223,8 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		$ta_field = $this->ta_field;
 		$img_field = $this->img_field;
+
+		if(!$page->$img_field || !$page->$ta_field) return;
 
 		$html = $page->$ta_field;
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
