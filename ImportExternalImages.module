@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> 201,
+			'version' 	=> 202,
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -40,6 +40,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	protected static $configDefaults = array(
 		'img_field'		=> 'images',
 		'ta_field'		=> 'body',
+		'url_field'		=> '',
 		'proceed'		=> false
 	); 
 
@@ -100,7 +101,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			if(!($t->flags & Template::flagSystem)) $f->addOption($t->name);
 		}
 		if(isset($data['enabledTemplates'])) $f->value = $data['enabledTemplates'];
-		$f->columnWidth = 33;
+		$f->columnWidth = 25;
 		$inputfields->add($f); 
 
 
@@ -127,11 +128,11 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
             $f->label = __('Enabled fields', __FILE__);
             $f->markupText = __('There are no image fields available', __FILE__);
         }
-        $f->columnWidth = 34;
+        $f->columnWidth = 25;
         $inputfields->add($f);
 
         // ------------------------------------------------------------------------
-        // Field to search for external image URLs
+        // Textarea Field to search for external image URLs
         // ------------------------------------------------------------------------
         $ta_fields = wire('fields')->find('type=FieldtypeTextarea|FieldtypeTextareaLanguage');
         if (count($ta_fields) > 0) {
@@ -153,8 +154,36 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
             $f->label = __('Textarea fields', __FILE__);
             $f->markupText = __('There are no textarea fields available to search in.', __FILE__);
         }
-        $f->columnWidth = 33;
+        $f->columnWidth = 25;
         $inputfields->add($f);
+
+
+        // ------------------------------------------------------------------------
+        // URL Field to search for external image -> new feature for getting single images.
+        // ------------------------------------------------------------------------
+        $url_fields = wire('fields')->find('type=FieldtypeURL');
+        if (count($url_fields) > 0) {
+            $f              = wire('modules')->get('InputfieldSelect');
+            $f->name        = 'url_field';
+            $f->label       = __('URL Field', __FILE__);
+            $f->description = __('Select a URL field to use for fetching an external image.', __FILE__);
+            foreach ($url_fields as $url_field) {
+                $f->addOption($url_field->name, self::getFormattedOptionName($url_field));
+            }
+
+            if ($data[ $f->name ]) {
+                $f->attr('value', $data[ $f->name ]);
+            }
+        } else {
+            // add info that no URL type fields are available
+            $f        = wire('modules')->get('InputfieldMarkup');
+            $f->name  = 'no_url_fields';
+            $f->label = __('URL fields', __FILE__);
+            $f->markupText = __('There are no URL fields available for image fetching.', __FILE__);
+        }
+        $f->columnWidth = 25;
+        $inputfields->add($f);
+
 
 
 		// ------------------------------------------------------------------------
@@ -221,8 +250,23 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		$page = $event->arguments[0];
 
-		$ta_field = $this->ta_field;
-		$img_field = $this->img_field;
+		$ta_field 	= $this->ta_field;
+		$img_field 	= $this->img_field;
+
+		// -------------- New feature - beta
+		$url_field  = $this->url_field;
+		if($url_field && $page->$img_field && $page->$url_field && $page->$url_field != '') {
+			$img_url = $page->$url_field;
+			if(filter_var($img_url, FILTER_VALIDATE_URL)) {
+				$page->of(false);
+				$page->$img_field->add($img_url);
+				$page->$url_field = '';
+				$page->save($img_field);
+				$page->save($url_field);
+				$this->message("Image URL successfully imported.");
+			}
+		}
+		// -------------- end new feature beta
 
 		if(!$page->$img_field || !$page->$ta_field) return;
 
@@ -274,6 +318,84 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $this->message("external images imported to page");
 
     }
+
+
+	/**
+	 * Method for API Usage of the importer function
+	 * @param  [type] $page [Must be instance of ProcessWire\Page ]
+	 * @return [type]        [description]
+	 */
+	public function importImages($page) {
+
+		$ta_field 	= $this->ta_field;
+		$img_field 	= $this->img_field;
+		$url_field  = $this->url_field;
+
+		if($url_field && $page->$img_field && $page->$url_field && $page->$url_field != '') {
+			$img_url = $page->$url_field;
+			if(filter_var($img_url, FILTER_VALIDATE_URL)) {
+				$page->of(false);
+				$page->$img_field->add($img_url);
+				$page->$url_field = '';
+				$page->save($img_field);
+				$page->save($url_field);
+				$this->message("Image URL successfully imported.");
+			}
+		}
+
+		if(!$page->$img_field || !$page->$ta_field) return;
+
+		$html = $page->$ta_field;
+		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
+
+        $dom = new \DOMDocument(); 
+        $dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+        $images = $dom->getElementsByTagName('img');
+        if(!$images->length) return; // not needed?
+
+        $assetsPath = $this->pages->get($page->id)->filesManager()->url();
+
+        $extCount = 0;
+        foreach ($images as $image) {
+            $img_url = $image->getAttribute('src');
+            if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+            $page->$img_field->add($img_url);
+
+	        if($image->getAttribute('title') != ''){
+	            $page->$img_field->last()->description = $image->getAttribute('title');
+	        }
+	        elseif($image->getAttribute('alt') != ''){
+	            $page->$img_field->last()->description = $image->getAttribute('alt');
+			}
+
+			// custom classes here?
+
+            //resize image to make version to match the size originally in the RTE
+            //check to make sure size is different to downloaded version before resizing
+            if($image->getAttribute('width') && $image->getAttribute('width') != $page->$img_field->last()->width) {
+                $imgForRte = $page->$img_field->last()->size($image->getAttribute('width'), 0);
+            }
+            else {
+                $imgForRte = $page->$img_field->last();
+            }
+			$image->setAttribute('src', $imgForRte->url);
+
+            $extCount++;
+        }
+
+        if(!$extCount) return;
+    	$page->of(false);
+
+   		$page->$ta_field = preg_replace('/^<!DOCTYPE.+?>/', '', str_replace( array('<html>', '</html>', '<body>', '</body>'), array('', '', '', ''), $dom->saveHTML()));
+
+   	 	$page->save($ta_field);
+   	 	$this->message("image links updated to local images.");
+
+        $page->save($img_field);
+        $this->message("external images imported to page");
+
+    }
+
 
 
 
