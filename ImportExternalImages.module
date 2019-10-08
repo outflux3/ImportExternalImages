@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> 202,
+			'version' 	=> '2.0.6',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -253,10 +253,30 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		$ta_field 	= $this->ta_field;
 		$img_field 	= $this->img_field;
 
-		// -------------- New feature - beta
+		// -------------- New feature: Use a field
 		$url_field  = $this->url_field;
 		if($url_field && $page->$img_field && $page->$url_field && $page->$url_field != '') {
+
 			$img_url = $page->$url_field;
+			if(!filter_var($img_url, FILTER_VALIDATE_URL)) {
+				$this->error("Invalid URL.");
+			}
+
+			// Check to see if the image has the correct file extension
+			$field_image = $this->wire('fields')->get($img_field);
+			$allowedExts = explode(' ', $field_image->extensions);
+			$imgExtParts = pathinfo($img_url);
+			$imgExt = $imgExtParts['extension'];
+			//bd($imgExt);
+			if(!in_array($imgExt, $allowedExts)) {
+				$page->of(false);
+				$page->$url_field = '';
+				$page->save($url_field);
+				$this->error("File extension $imgExt not permitted.");
+				return;
+			}
+
+			// Assuming the extension was ok, proceed
 			if(filter_var($img_url, FILTER_VALIDATE_URL)) {
 				$page->of(false);
 				$page->$img_field->add($img_url);
@@ -264,6 +284,27 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 				$page->save($img_field);
 				$page->save($url_field);
 				$this->message("Image URL successfully imported.");
+
+				// make sure that any added images have the correct extension:
+				$map = array( IMAGETYPE_JPEG=>'jpg', IMAGETYPE_PNG=>'png', IMAGETYPE_GIF=>'gif', IMAGETYPE_WEBP=>'webp' );
+
+				$img = $page->images->first();
+				$ext_im = $map[exif_imagetype($img->filename)];
+				$addon = false;
+				if($img->ext) {
+					$ext_fn = strtolower($img->ext);
+				} else {
+					// image has no extension, add a new extension
+					$ext_fn = '';
+					$addon = true;
+				}
+				if($ext_im != $ext_fn) {
+					if($addon) $newFilename = $sanitizer->pageName($page->title) . '.' . $ext_im;
+				    if(!$addon) $newFilename = str_replace('.' . $img->ext, '.' . $ext_im, $img->name);	
+				    $img->rename($newFilename);
+				    $page->save('images');
+				}
+
 			}
 		}
 		// -------------- end new feature beta
