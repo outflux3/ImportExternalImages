@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.6',
+			'version' 	=> '2.0.7',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -253,6 +253,9 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		$ta_field 	= $this->ta_field;
 		$img_field 	= $this->img_field;
 
+		$field_image = $this->wire('fields')->get($img_field);
+		$allowedExts = explode(' ', $field_image->extensions);
+
 		// -------------- New feature: Use a field
 		$url_field  = $this->url_field;
 		if($url_field && $page->$img_field && $page->$url_field && $page->$url_field != '') {
@@ -263,11 +266,8 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			}
 
 			// Check to see if the image has the correct file extension
-			$field_image = $this->wire('fields')->get($img_field);
-			$allowedExts = explode(' ', $field_image->extensions);
 			$imgExtParts = pathinfo($img_url);
 			$imgExt = $imgExtParts['extension'];
-			//bd($imgExt);
 			if(!in_array($imgExt, $allowedExts)) {
 				$page->of(false);
 				$page->$url_field = '';
@@ -322,10 +322,25 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $assetsPath = $this->pages->get($page->id)->filesManager()->url();
 
         $extCount = 0;
-        foreach ($images as $image) {
+		$errors = [];
+		//$messages = [];
+		foreach ($images as $image) {
             $img_url = $image->getAttribute('src');
-            if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+		   
+			if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+
+			// Check to see if the image has an allowed file extension for the field.
+			$imgExtParts = pathinfo($img_url);
+			$imgExt = $imgExtParts['extension'];
+			if(!in_array($imgExt, $allowedExts)) {
+				$errors[] = "File extension $imgExt not permitted for $img_url.";
+				continue;
+			}
+
+			// If we made it this far, add the image.
+			// =================================================================
             $page->$img_field->add($img_url);
+			//$messages[] = "Image successfully added: $img_url.";
 
 	        if($image->getAttribute('title') != ''){
 	            $page->$img_field->last()->description = $image->getAttribute('title');
@@ -353,10 +368,16 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
    		$page->$ta_field = preg_replace('/^<!DOCTYPE.+?>/', '', str_replace( array('<html>', '</html>', '<body>', '</body>'), array('', '', '', ''), $dom->saveHTML()));
 
    	 	$page->save($ta_field);
-   	 	$this->message("image links updated to local images.");
+   	 	$this->message("Image links updated to local images.");
 
         $page->save($img_field);
-        $this->message("external images imported to page");
+        $this->message("External images imported to page.");
+
+		if(count($errors)) {
+			$msgOut = "Errors occured and some images were not imported. See below.\n";
+			$msgOut .= implode("\n", $errors);
+			$this->error($msgOut);
+		}
 
     }
 
