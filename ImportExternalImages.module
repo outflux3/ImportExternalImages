@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.7',
+			'version' 	=> '2.0.8',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -411,7 +411,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
 
         $dom = new \DOMDocument(); 
-        $dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+        @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
         $images = $dom->getElementsByTagName('img');
         if(!$images->length) return; // not needed?
 
