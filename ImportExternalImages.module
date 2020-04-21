@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.10',
+			'version' 	=> '2.0.11',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -290,7 +290,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 				// make sure that any added images have the correct extension:
 				$map = array( IMAGETYPE_JPEG=>'jpg', IMAGETYPE_PNG=>'png', IMAGETYPE_GIF=>'gif', IMAGETYPE_WEBP=>'webp' );
 
-				$img = $page->images->first();
+				$img = $page->$img_field->first();
 				$ext_im = $map[exif_imagetype($img->filename)];
 				$addon = false;
 				if($img->ext) {
@@ -304,15 +304,15 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 				if($ext_im != $ext_fn) {
 					// if analysis of local image reveals that it is a webp, with jpg extension, remove the file
 					// to prevent imagesizer from crashing.
-					if($ext_im == 'webp') {
-						$page->images->delete($img);
+					if($ext_im == 'webp') {						
+						$page->$img_field->delete($img);
 						$page->save();
 						$this->error("Image not imported: extension mismatch - image is a webp.");
 					} else {
 						if($addon) $newFilename = $sanitizer->pageName($page->title) . '.' . $ext_im;
 						if(!$addon) $newFilename = str_replace('.' . $img->ext, '.' . $ext_im, $img->name);	
 						$img->rename($newFilename);
-						$page->save('images');
+						$page->save($img_field);
 					}
 				}
 
