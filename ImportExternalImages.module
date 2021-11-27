@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.11',
+			'version' 	=> '2.0.12',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -99,6 +99,9 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		foreach(wire('templates') as $t) {
 			// filter out system templates
 			if(!($t->flags & Template::flagSystem)) $f->addOption($t->name);
+			
+			// breaking change - need to have an upgrade method before this change (?)
+			//if(!($t->flags & Template::flagSystem)) $f->addOption($t->id, $t->name);
 		}
 		if(isset($data['enabledTemplates'])) $f->value = $data['enabledTemplates'];
 		$f->columnWidth = 25;
@@ -323,6 +326,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		if(!$page->$img_field || !$page->$ta_field) return;
 
 		$html = $page->$ta_field;
+		$html = preg_replace('/(.*)(.jpe?g|.gif|.png)(\?[\d]+)(.*)/', '$1$2$4', $html);
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
 
         $dom = new \DOMDocument(); 
@@ -339,6 +343,10 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
             $img_url = $image->getAttribute('src');
 		   
 			if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+			
+			// added @adrian
+			$parsed = parse_url($img_url);
+			$img_url= $parsed['scheme']. '://'. $parsed['host']. $parsed['path'];
 
 			// Check to see if the image has an allowed file extension for the field.
 			$imgExtParts = pathinfo($img_url);
@@ -352,6 +360,12 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			// =================================================================
             $page->$img_field->add($img_url);
 			//$messages[] = "Image successfully added: $img_url.";
+
+			// @adrian
+			if(strpos($img_url, '%20') !== false) {
+				$cleanedName = str_replace('_20', '-', $page->$img_field->last()->filename);
+				$page->$img_field->last()->rename($cleanedName);
+			}
 
 	        if($image->getAttribute('title') != ''){
 	            $page->$img_field->last()->description = $image->getAttribute('title');
@@ -371,6 +385,14 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
                 $imgForRte = $page->$img_field->last();
             }
 			$image->setAttribute('src', $imgForRte->url);
+
+			// added @adrian
+			$figure = $dom->createElement('figure');
+			$figcaption = $dom->createElement('figcaption');
+			$figcaption->nodeValue = $image->getAttribute('alt');
+			$image->parentNode->replaceChild($figure, $image);
+			$figure->appendChild($image);
+			$figure->appendChild($figcaption);
 
             $extCount++;
         }
@@ -421,6 +443,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		if(!$page->$img_field || !$page->$ta_field) return;
 
 		$html = $page->$ta_field;
+		$html = preg_replace('/(.*)(.jpe?g|.gif|.png)(\?[\d]+)(.*)/', '$1$2$4', $html);
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
 
         $dom = new \DOMDocument(); 
@@ -470,6 +493,27 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $this->message("external images imported to page");
 
     }
+
+
+
+
+    // public function ___upgrade($fromVersion, $toVersion) {
+
+    //     // change module config settings for the stored templates from name to ID
+    //     if(isset($this->data['enabledTemplates'])) {
+            
+	// 		foreach(json_decode($this->data['enabledTemplates']) as $tplName) {
+
+    //         }
+            
+	// 		$configData = $this->wire('modules')->getModuleConfigData("ImportExternalImages");
+    //     	unset($configData['enabledTemplates']);
+    //        $this->wire('modules')->saveModuleConfigData($this, $configData);
+
+    //     }
+
+    // }
+
 
 
 
