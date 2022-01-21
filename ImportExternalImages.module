@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.12',
+			'version' 	=> '2.0.13',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -187,7 +187,21 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $f->columnWidth = 25;
         $inputfields->add($f);
 
+		// ------------------------------------------------------------------------
+        // Should images be wrapped in a figure tag?
+        // ------------------------------------------------------------------------
 
+		$f              = wire('modules')->get('InputfieldCheckbox');
+		$f->name        = 'dont_wrap_figure';
+		$f->label       = __('Prevent wrapping images in figure tag', __FILE__);
+
+		if ($data[$f->name]) {
+			$f->attr('value', $data[$f->name]);
+		}
+		$f->checked = ($f->value == 1) ? 'checked' : '';
+
+		$f->columnWidth = 100;
+		$inputfields->add($f);
 
 		// ------------------------------------------------------------------------
 		return $inputfields;
@@ -255,6 +269,8 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		$ta_field 	= $this->ta_field;
 		$img_field 	= $this->img_field;
+
+		$dont_wrap_figure = $this->dont_wrap_figure;
 
 		$field_image = $this->wire('fields')->get($img_field);
 		$allowedExts = explode(' ', $field_image->extensions);
@@ -387,12 +403,15 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			$image->setAttribute('src', $imgForRte->url);
 
 			// added @adrian
-			$figure = $dom->createElement('figure');
-			$figcaption = $dom->createElement('figcaption');
-			$figcaption->nodeValue = $image->getAttribute('alt');
-			$image->parentNode->replaceChild($figure, $image);
-			$figure->appendChild($image);
-			$figure->appendChild($figcaption);
+			// add check by tobaco
+			if(!$dont_wrap_figure){
+				$figure = $dom->createElement('figure');
+				$figcaption = $dom->createElement('figcaption');
+				$figcaption->nodeValue = $image->getAttribute('alt');
+				$image->parentNode->replaceChild($figure, $image);
+				$figure->appendChild($image);
+				$figure->appendChild($figcaption);
+			}
 
             $extCount++;
         }
