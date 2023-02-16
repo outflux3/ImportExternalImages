@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.12',
+			'version' 	=> '2.0.13',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -454,9 +454,13 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $assetsPath = $this->pages->get($page->id)->filesManager()->url();
 
         $extCount = 0;
+        $errors = [];
         foreach ($images as $image) {
             $img_url = $image->getAttribute('src');
             if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
+            
+            // add additional error checking here
+
             $page->$img_field->add($img_url);
 
 	        if($image->getAttribute('title') != ''){
@@ -466,17 +470,24 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	            $page->$img_field->last()->description = $image->getAttribute('alt');
 			}
 
-			// custom classes here?
-
             //resize image to make version to match the size originally in the RTE
             //check to make sure size is different to downloaded version before resizing
-            if($image->getAttribute('width') && $image->getAttribute('width') != $page->$img_field->last()->width) {
-                $imgForRte = $page->$img_field->last()->size($image->getAttribute('width'), 0);
+            $imgWidth = $image->getAttribute('width');
+			if(strpos($imgWidth,'%') !== false) $imgWidth = ''; // don't resize if image is % size.
+			if($imgWidth && $imgWidth != $page->$img_field->last()->width) {
+                $imgForRte = $page->$img_field->last()->size($imgWidth, 0);
             }
             else {
                 $imgForRte = $page->$img_field->last();
             }
 			$image->setAttribute('src', $imgForRte->url);
+
+			$figure = $dom->createElement('figure');
+			$figcaption = $dom->createElement('figcaption');
+			$figcaption->nodeValue = $image->getAttribute('alt');
+			$image->parentNode->replaceChild($figure, $image);
+			$figure->appendChild($image);
+			$figure->appendChild($figcaption);
 
             $extCount++;
         }
@@ -492,8 +503,8 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $page->save($img_field);
         $this->message("external images imported to page");
 
-    }
 
+    }
 
 
 
@@ -513,8 +524,6 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
     //     }
 
     // }
-
-
 
 
 
