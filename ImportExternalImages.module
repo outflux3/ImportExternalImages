@@ -191,10 +191,10 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         // Should images be wrapped in a figure tag?
         // ------------------------------------------------------------------------
 
-		$f              = wire('modules')->get('InputfieldCheckbox');
+		$f = wire('modules')->get('InputfieldCheckbox');
 		$f->attr('name', 'dont_wrap_figure');
 		$f->attr('value', 1); 
-		$f->label       = __('Prevent wrapping images in figure tag', __FILE__);
+		$f->label = __('Prevent wrapping images in figure tag', __FILE__);
 		if($data[$f->name]) $f->attr('checked', 'checked'); 
 
 		$f->columnWidth = 100;
