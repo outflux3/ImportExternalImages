@@ -192,13 +192,10 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         // ------------------------------------------------------------------------
 
 		$f              = wire('modules')->get('InputfieldCheckbox');
-		$f->name        = 'dont_wrap_figure';
+		$f->attr('name', 'dont_wrap_figure');
+		$f->attr('value', 1); 
 		$f->label       = __('Prevent wrapping images in figure tag', __FILE__);
-
-		if ($data[$f->name]) {
-			$f->attr('value', $data[$f->name]);
-		}
-		$f->checked = ($f->value == 1) ? 'checked' : '';
+		if($data[$f->name]) $f->attr('checked', 'checked'); 
 
 		$f->columnWidth = 100;
 		$inputfields->add($f);
