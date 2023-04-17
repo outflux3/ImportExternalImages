@@ -26,7 +26,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		return array(
 			'title' 	=> 'Import External Images',
-			'version' 	=> '2.0.14',
+			'version' 	=> '2.0.15',
 			'summary' 	=> 'For content pasted in textarea fields, this will import external images to the images field.',
 			'href' 		=> 'https://processwire.com/talk/topic/15538-import-external-images/',
 			'singular' 	=> true,
@@ -38,10 +38,11 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 
 	protected static $configDefaults = array(
-		'img_field'		=> 'images',
-		'ta_field'		=> 'body',
-		'url_field'		=> '',
-		'proceed'		=> false
+		'img_field'			=> 'images',
+		'ta_field'			=> 'body',
+		'url_field'			=> '',
+		'proceed'			=> false,
+		'dont_wrap_figure' 	=> '',
 	); 
 
 
