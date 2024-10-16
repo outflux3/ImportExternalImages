@@ -43,7 +43,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		'url_field'			=> '',
 		'proceed'			=> false,
 		'dont_wrap_figure' 	=> '',
-	); 
+	);
 
 
 	/**
@@ -58,7 +58,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	 */
 	public function __construct() {
 		foreach(self::$configDefaults as $key => $value) {
-			$this->set($key, $value); 
+			$this->set($key, $value);
 		}
 	}
 
@@ -84,7 +84,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         $f->markupText = __('For this module to work, please select the fields to allow this module to perform replacements on, as well as the name of the image field on the same page to add the images to.', __FILE__);
         $f->markupText .= "<br>";
         $f->markupText .= __('<span style="font-style:italic;color:red">If you are importing images from a 3rd party site, make sure you have permissions to store and display those images on your site.</span>', __FILE__);
-        $inputfields->add($f); 
+        $inputfields->add($f);
 
 
 		// ENABLE FOR TEMPLATES
@@ -100,17 +100,17 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		foreach(wire('templates') as $t) {
 			// filter out system templates
 			if(!($t->flags & Template::flagSystem)) $f->addOption($t->name);
-			
+
 			// breaking change - need to have an upgrade method before this change (?)
 			//if(!($t->flags & Template::flagSystem)) $f->addOption($t->id, $t->name);
 		}
 		if(isset($data['enabledTemplates'])) $f->value = $data['enabledTemplates'];
 		$f->columnWidth = 25;
-		$inputfields->add($f); 
+		$inputfields->add($f);
 
 
         // ------------------------------------------------------------------------
-        // Field to put images into 
+        // Field to put images into
         // ------------------------------------------------------------------------
         $img_fields = wire('fields')->find('type=FieldtypeImage|FieldtypeCroppableImage3');
         if (count($img_fields) > 0) {
@@ -194,9 +194,9 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 		$f = wire('modules')->get('InputfieldCheckbox');
 		$f->attr('name', 'dont_wrap_figure');
-		$f->attr('value', 1); 
+		$f->attr('value', 1);
 		$f->label = __('Prevent wrapping images in figure tag', __FILE__);
-		if($data[$f->name]) $f->attr('checked', 'checked'); 
+		if($data[$f->name]) $f->attr('checked', 'checked');
 
 		$f->columnWidth = 100;
 		$inputfields->add($f);
@@ -321,13 +321,13 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 				if($ext_im != $ext_fn) {
 					// if analysis of local image reveals that it is a webp, with jpg extension, remove the file
 					// to prevent imagesizer from crashing.
-					if($ext_im == 'webp') {						
+					if($ext_im == 'webp') {
 						$page->$img_field->delete($img);
 						$page->save();
 						$this->error("Image not imported: extension mismatch - image is a webp.");
 					} else {
 						if($addon) $newFilename = $sanitizer->pageName($page->title) . '.' . $ext_im;
-						if(!$addon) $newFilename = str_replace('.' . $img->ext, '.' . $ext_im, $img->name);	
+						if(!$addon) $newFilename = str_replace('.' . $img->ext, '.' . $ext_im, $img->name);
 						$img->rename($newFilename);
 						$page->save($img_field);
 					}
@@ -343,7 +343,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		$html = preg_replace('/(.*)(.jpe?g|.gif|.png)(\?[\d]+)(.*)/', '$1$2$4', $html);
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
 
-        $dom = new \DOMDocument(); 
+        $dom = new \DOMDocument();
         @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
         $images = $dom->getElementsByTagName('img');
         if(!$images->length) return; // not needed?
@@ -355,9 +355,9 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		//$messages = [];
 		foreach ($images as $image) {
             $img_url = $image->getAttribute('src');
-		   
+
 			if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
-			
+
 			// added @adrian
 			$parsed = parse_url($img_url);
 			$img_url= $parsed['scheme']. '://'. $parsed['host']. $parsed['path'];
@@ -384,7 +384,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	        if($image->getAttribute('title') != ''){
 	            $page->$img_field->last()->description = $image->getAttribute('title');
 	        }
-	        elseif($image->getAttribute('alt') != ''){
+	        elseif($image->getAttribute('alt') != '' && $image->getAttribute('alt') != basename($image->getAttribute('src'))){
 	            $page->$img_field->last()->description = $image->getAttribute('alt');
 			}
 
@@ -404,11 +404,13 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			// add check by tobaco
 			if(!$dont_wrap_figure) {
 				$figure = $dom->createElement('figure');
-				$figcaption = $dom->createElement('figcaption');
-				$figcaption->nodeValue = $image->getAttribute('alt');
 				$image->parentNode->replaceChild($figure, $image);
 				$figure->appendChild($image);
-				$figure->appendChild($figcaption);
+				if($image->getAttribute('alt') != '' && $image->getAttribute('alt') != basename($image->getAttribute('src'))) {
+					$figcaption = $dom->createElement('figcaption');
+					$figcaption->nodeValue = $image->getAttribute('alt');
+					$figure->appendChild($figcaption);
+				}
 			}
 
             $extCount++;
@@ -465,7 +467,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 		$html = preg_replace('/(.*)(.jpe?g|.gif|.png)(\?[\d]+)(.*)/', '$1$2$4', $html);
 		if (strpos($html,'<img') === false) return; //return early if no images are embedded in html
 
-        $dom = new \DOMDocument(); 
+        $dom = new \DOMDocument();
         @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
         $images = $dom->getElementsByTagName('img');
         if(!$images->length) return; // not needed?
@@ -477,7 +479,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
         foreach ($images as $image) {
             $img_url = $image->getAttribute('src');
             if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
-            
+
             // add additional error checking here
 
             $page->$img_field->add($img_url);
@@ -485,7 +487,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	        if($image->getAttribute('title') != ''){
 	            $page->$img_field->last()->description = $image->getAttribute('title');
 	        }
-	        elseif($image->getAttribute('alt') != ''){
+	        elseif($image->getAttribute('alt') != '' && $image->getAttribute('alt') != basename($image->getAttribute('src'))){
 	            $page->$img_field->last()->description = $image->getAttribute('alt');
 			}
 
@@ -503,11 +505,13 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
 			if(!$dont_wrap_figure) {
 				$figure = $dom->createElement('figure');
-				$figcaption = $dom->createElement('figcaption');
-				$figcaption->nodeValue = $image->getAttribute('alt');
 				$image->parentNode->replaceChild($figure, $image);
 				$figure->appendChild($image);
-				$figure->appendChild($figcaption);
+				if($image->getAttribute('alt') != '' && $image->getAttribute('alt') != basename($image->getAttribute('src'))) {
+					$figcaption = $dom->createElement('figcaption');
+					$figcaption->nodeValue = $image->getAttribute('alt');
+					$figure->appendChild($figcaption);
+				}
 			}
 
             $extCount++;
@@ -533,11 +537,11 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
     //     // change module config settings for the stored templates from name to ID
     //     if(isset($this->data['enabledTemplates'])) {
-            
+
 	// 		foreach(json_decode($this->data['enabledTemplates']) as $tplName) {
 
     //         }
-            
+
 	// 		$configData = $this->wire('modules')->getModuleConfigData("ImportExternalImages");
     //     	unset($configData['enabledTemplates']);
     //        $this->wire('modules')->saveModuleConfigData($this, $configData);
