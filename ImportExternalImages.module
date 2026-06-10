@@ -441,10 +441,17 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 	 * @param  [type] $page [Must be instance of ProcessWire\Page ]
 	 * @return [type]        [description]
 	 */
-	public function importImages($page) {
+	/**
+	 * API method: import external images from a textarea/RTE field into an images field.
+	 *
+	 * @param Page        $page
+	 * @param string|null $taField  Override the configured textarea field to scan (optional)
+	 * @param string|null $imgField Override the configured images field to receive images (optional)
+	 */
+	public function importImages($page, $taField = null, $imgField = null) {
 
-		$ta_field 	= $this->ta_field;
-		$img_field 	= $this->img_field;
+		$ta_field 	= $taField  ?? $this->ta_field;
+		$img_field 	= $imgField ?? $this->img_field;
 		$url_field  = $this->url_field;
 
 		$dont_wrap_figure = $this->dont_wrap_figure;
@@ -461,7 +468,7 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 			}
 		}
 
-		if(!$page->$img_field || !$page->$ta_field) return;
+		if(!$page->fields->has($img_field) || !$page->fields->has($ta_field)) return;
 
 		$html = $page->$ta_field;
 		$html = preg_replace('/(.*)(.jpe?g|.gif|.png)(\?[\d]+)(.*)/', '$1$2$4', $html);
@@ -474,32 +481,58 @@ class ImportExternalImages extends WireData implements Module, ConfigurableModul
 
         $assetsPath = $this->pages->get($page->id)->filesManager()->url();
 
+        $field_image = $this->wire('fields')->get($img_field);
+        $allowedExts = $field_image ? explode(' ', strtolower($field_image->extensions)) : [];
+
         $extCount = 0;
         $errors = [];
         foreach ($images as $image) {
             $img_url = $image->getAttribute('src');
             if(!filter_var($img_url, FILTER_VALIDATE_URL)) continue;
 
-            // add additional error checking here
+            // Skip non-absolute or already-local images
+            $parsed  = parse_url($img_url);
+            $imgPath = $parsed['path'] ?? '';
+            $imgExt  = strtolower(pathinfo($imgPath, PATHINFO_EXTENSION));
 
-            $page->$img_field->add($img_url);
+            // skip images with no detectable extension — they trigger Sanitizer warnings in PW core
+            if(!$imgExt) {
+                $errors[] = "Skipped (no extension): $img_url";
+                continue;
+            }
+
+            if($allowedExts && !in_array($imgExt, $allowedExts)) {
+                $errors[] = "Extension .$imgExt not permitted for $img_url";
+                continue;
+            }
+
+            try {
+                $page->$img_field->add($img_url);
+            } catch(\Throwable $e) {
+                $errors[] = "Could not add image $img_url: " . $e->getMessage();
+                continue;
+            }
+
+            // Confirm the add succeeded before touching ->last()
+            $addedImg = $page->$img_field->last();
+            if(!$addedImg) continue;
 
 	        if($image->getAttribute('title') != ''){
-	            $page->$img_field->last()->description = $image->getAttribute('title');
+	            $addedImg->description = $image->getAttribute('title');
 	        }
 	        elseif($image->getAttribute('alt') != '' && $image->getAttribute('alt') != basename($image->getAttribute('src'))){
-	            $page->$img_field->last()->description = $image->getAttribute('alt');
+	            $addedImg->description = $image->getAttribute('alt');
 			}
 
             //resize image to make version to match the size originally in the RTE
             //check to make sure size is different to downloaded version before resizing
             $imgWidth = $image->getAttribute('width');
 			if(strpos($imgWidth,'%') !== false) $imgWidth = ''; // don't resize if image is % size.
-			if($imgWidth && $imgWidth != $page->$img_field->last()->width) {
-                $imgForRte = $page->$img_field->last()->size($imgWidth, 0);
+			if($imgWidth && $imgWidth != $addedImg->width) {
+                $imgForRte = $addedImg->size($imgWidth, 0);
             }
             else {
-                $imgForRte = $page->$img_field->last();
+                $imgForRte = $addedImg;
             }
 			$image->setAttribute('src', $imgForRte->url);
 
